@@ -16,13 +16,20 @@ export function validateEnvironment() {
     Boolean(process.env.VERCEL_URL);
 
   if (isProd) {
-    const prodRecommended = [
+    const prodRequired = [
       "CLIENT_URL",
       "CLOUDINARY_CLOUD_NAME",
       "CLOUDINARY_API_KEY",
       "CLOUDINARY_API_SECRET",
-      "STRIPE_SECRET_KEY",
     ];
+    const missingProdRequired = prodRequired.filter((key) => !process.env[key]?.trim());
+    if (missingProdRequired.length) {
+      throw new Error(
+        `Missing required production environment variables: ${missingProdRequired.join(", ")}`
+      );
+    }
+
+    const prodRecommended = ["STRIPE_SECRET_KEY"];
     const missingProd = prodRecommended.filter((key) => !process.env[key]?.trim());
     if (missingProd.length) {
       console.warn(

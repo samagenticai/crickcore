@@ -1,6 +1,3 @@
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
 import User from "../models/User.js";
 import Settings from "../models/Settings.js";
 import { isAdminRole, normalizeRole } from "../constants/roles.js";
@@ -11,21 +8,10 @@ import { syncSubscriptionExpiry } from "../utils/subscription.js";
 import { generateToken, sendTokenCookie } from "../utils/token.js";
 import crypto from "crypto";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = path.join(__dirname, "../../uploads");
-
 const getOrCreateSettings = async (userId) => {
   let settings = await Settings.findOne({ user: userId });
   if (!settings) settings = await Settings.create({ user: userId });
   return settings;
-};
-
-const removeLocalAvatar = (profilePicture) => {
-  if (!profilePicture || profilePicture.startsWith("http")) return;
-  if (!profilePicture.startsWith("/uploads/")) return;
-  const filename = path.basename(profilePicture);
-  const filePath = path.join(uploadDir, filename);
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 };
 
 /** Avoid document.save() validation on legacy Title-Case roles like "Organizer". */
@@ -176,8 +162,6 @@ export const uploadAvatar = asyncHandler(async (req, res) => {
   const previous = await User.findById(req.user._id).select("profilePicture role");
   if (!previous) throw new ApiError(404, "User not found");
 
-  if (previous.profilePicture) removeLocalAvatar(previous.profilePicture);
-
   const avatarUrl = await resolveUpload(req.file, "profiles/avatars");
   const user = await persistAvatar(req.user._id, avatarUrl);
   if (!user) throw new ApiError(404, "User not found");
@@ -193,8 +177,6 @@ export const uploadAvatar = asyncHandler(async (req, res) => {
 export const deleteAvatar = asyncHandler(async (req, res) => {
   const previous = await User.findById(req.user._id).select("profilePicture role");
   if (!previous) throw new ApiError(404, "User not found");
-
-  if (previous.profilePicture) removeLocalAvatar(previous.profilePicture);
 
   const user = await persistAvatar(req.user._id, "");
   if (!user) throw new ApiError(404, "User not found");

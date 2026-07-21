@@ -61,12 +61,3 @@ export async function uploadImageBuffer(buffer, folder = "uploads", originalName
     upload.end(buffer);
   });
 }
-
-/** True when running on Vercel or explicit production without local disk. */
-export function requiresCloudinaryUploads() {
-  return (
-    process.env.NODE_ENV === "production" ||
-    Boolean(process.env.VERCEL) ||
-    Boolean(process.env.VERCEL_URL)
-  );
-}

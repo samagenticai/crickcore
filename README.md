@@ -12,7 +12,7 @@ CrickCore is a full-stack platform for organizing cricket tournaments end to end
 - **Points table** — Automatic standings with NRR and fixture progress
 - **Subscriptions** — Stripe-powered plans with checkout and webhooks
 - **Admin panel** — Platform-wide user, tournament, payment, and resource management
-- **Media uploads** — Cloudinary in production; local disk fallback for development
+- **Media uploads** — Cloudinary (required; no local disk storage)
 - **Security** — JWT auth, role-based access, rate limiting, helmet, CORS, and 15-minute inactivity logout on dashboards
 
 ## Tech Stack
@@ -114,7 +114,7 @@ cd frontend && npm run lint
 cd backend && npm run seed:admin   # One-time admin user (requires ADMIN_* in .env)
 ```
 
-Cloudinary is optional locally; image uploads fall back to `backend/uploads/` (gitignored).
+Cloudinary is required for all image uploads (local disk storage is not supported).
 
 ## Deployment Instructions (Vercel)
 

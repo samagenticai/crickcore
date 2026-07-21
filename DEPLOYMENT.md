@@ -63,7 +63,7 @@ cd backend && npm install && npm run dev
 cd frontend && npm install && npm run dev
 ```
 
-Cloudinary is optional locally; images fall back to `backend/uploads/`.
+Cloudinary is required for all image uploads (local disk storage is not supported).
 
 ## Production checklist
 

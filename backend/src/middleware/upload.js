@@ -1,20 +1,7 @@
 import multer from "multer";
 import path from "path";
-import { fileURLToPath } from "url";
-import fs from "fs";
 import { ApiError } from "../utils/helpers.js";
-import {
-  isCloudinaryConfigured,
-  requiresCloudinaryUploads,
-  uploadImageBuffer,
-} from "../utils/cloudinaryStorage.js";
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDir = path.join(__dirname, "../../uploads");
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+import { isCloudinaryConfigured, uploadImageBuffer } from "../utils/cloudinaryStorage.js";
 
 const ALLOWED_EXT = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
@@ -39,7 +26,7 @@ const fileFilter = (_req, file, cb) => {
   );
 };
 
-/** Memory storage — required for Cloudinary; works in serverless environments. */
+/** Memory storage only — required for Vercel/serverless and Cloudinary uploads. */
 const storage = multer.memoryStorage();
 
 export const upload = multer({
@@ -49,33 +36,21 @@ export const upload = multer({
 });
 
 /**
- * Resolve a multer file to a public URL.
- * Production/Vercel: Cloudinary HTTPS URL.
- * Development: local /uploads path when Cloudinary is not configured.
+ * Resolve a multer file to a public Cloudinary HTTPS URL.
+ * Local disk storage is not supported (serverless-safe).
  */
 export async function resolveUpload(file, folder = "uploads") {
   if (!file) return null;
 
-  if (isCloudinaryConfigured()) {
-    return uploadImageBuffer(file.buffer, folder, file.originalname || "image.jpg");
-  }
-
-  if (requiresCloudinaryUploads()) {
+  if (!isCloudinaryConfigured()) {
     throw new ApiError(
       503,
-      "Image uploads require Cloudinary in production. Configure CLOUDINARY_* environment variables."
+      "Image uploads require Cloudinary. Configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET."
     );
   }
 
-  const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-  const ext = path.extname(file.originalname || "").toLowerCase();
-  const filename = `${unique}${ALLOWED_EXT.has(ext) ? ext : ".jpg"}`;
-  fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
-  return `/uploads/${filename}`;
+  return uploadImageBuffer(file.buffer, folder, file.originalname || "image.jpg");
 }
-
-/** @deprecated Use resolveUpload for new uploads. Kept for legacy paths already stored in DB. */
-export const getFileUrl = (filename) => `/uploads/${filename}`;
 
 export const uploadAvatarMiddleware = (req, res, next) => {
   const handler = upload.fields([
