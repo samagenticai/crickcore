@@ -9,8 +9,44 @@ import {
   isKnockoutType,
 } from "../constants/tournamentTypes.js";
 
-/** In-flight recalculations — dedupe concurrent requests for the same tournament. */
+/** In-flight recalculations — one write at a time per tournament. */
 const inflightRecalc = new Map();
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isWriteConflictError = (err) => {
+  const msg = err?.message || "";
+  return (
+    err?.code === 112 ||
+    err?.codeName === "WriteConflict" ||
+    msg.includes("Write conflict") ||
+    msg.includes("write conflict")
+  );
+};
+
+/** Retry transient MongoDB write conflicts (common under concurrent standings updates). */
+const withWriteConflictRetry = async (label, fn, { maxAttempts = 5, baseDelayMs = 40 } = {}) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!isWriteConflictError(err) || attempt === maxAttempts) throw err;
+      const delay = baseDelayMs * attempt + Math.floor(Math.random() * 30);
+      console.warn(
+        `[standings] Write conflict during ${label} (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms`
+      );
+      await sleep(delay);
+    }
+  }
+};
+
+const normalizeRecalcOptions = (third) => {
+  if (typeof third === "number") return { depth: third, force: false };
+  if (third && typeof third === "object") {
+    return { depth: third.depth ?? 0, force: Boolean(third.force) };
+  }
+  return { depth: 0, force: false };
+};
 
 /** Net run rate from cumulative legal-ball totals (overs = legalBalls / 6). */
 export const calcNetRunRate = (stats = {}) => {
@@ -167,15 +203,13 @@ export const standingsStatsMismatch = async (
 
 const loadTeamsForStandingsRecalc = async (
   tournamentId,
-  { Team: TeamModel = Team, Match: MatchModel = Match } = {},
-  session = null
+  { Team: TeamModel = Team, Match: MatchModel = Match } = {}
 ) => {
   await ensureTournamentTeamLinks(tournamentId, { Team: TeamModel, Match: MatchModel });
 
-  const matchQuery = MatchModel.find(finishedMatchFilter(tournamentId)).select(
-    "teamA teamB winner status liveScore resultType resultSummary updatedAt"
-  );
-  const matches = session ? await matchQuery.session(session).lean() : await matchQuery.lean();
+  const matches = await MatchModel.find(finishedMatchFilter(tournamentId))
+    .select("teamA teamB winner status liveScore resultType resultSummary updatedAt")
+    .lean();
 
   const matchTeamIds = new Set();
   for (const match of matches) {
@@ -189,8 +223,7 @@ const loadTeamsForStandingsRecalc = async (
     $or: [{ tournament: tournamentId }, ...(matchTeamIds.size ? [{ _id: { $in: [...matchTeamIds] } }] : [])],
   };
 
-  const teamQuery = TeamModel.find(teamLookup);
-  const teams = session ? await teamQuery.session(session) : await teamQuery;
+  const teams = await TeamModel.find(teamLookup);
 
   const teamMap = new Map();
   for (const team of teams) {
@@ -380,23 +413,7 @@ const applyCompletedMatchesToTeams = (matches, teamMap, tournamentId) => {
   );
 };
 
-const performRecalculate = async (tournamentId, { Team: TeamModel = Team, Match: MatchModel = Match } = {}) => {
-  try {
-    return await performRecalculateWithTransaction(tournamentId, { Team: TeamModel, Match: MatchModel });
-  } catch (err) {
-    const msg = err?.message || "";
-    if (
-      err?.code === 20 ||
-      msg.includes("Transaction") ||
-      msg.includes("replica set")
-    ) {
-      return performRecalculateWithoutTransaction(tournamentId, { Team: TeamModel, Match: MatchModel });
-    }
-    throw err;
-  }
-};
-
-const performRecalculateWithoutTransaction = async (
+const persistStandingsRecalc = async (
   tournamentId,
   { Team: TeamModel = Team, Match: MatchModel = Match } = {}
 ) => {
@@ -407,69 +424,43 @@ const performRecalculateWithoutTransaction = async (
 
   applyCompletedMatchesToTeams(matches, teamMap, tournamentId);
 
+  for (const team of teams) {
+    team.stats.netRunRate = calcNetRunRate(team.stats);
+  }
+
   const now = new Date();
-  await Promise.all(
-    teams.map((team) => {
-      team.stats.netRunRate = calcNetRunRate(team.stats);
-      team.markModified("stats");
-      return team.save();
-    })
-  );
+  const bulkOps = teams.map((team) => ({
+    updateOne: {
+      filter: { _id: team._id },
+      update: {
+        $set: {
+          stats: team.stats,
+          tournament: tournamentId,
+        },
+      },
+    },
+  }));
+
+  if (bulkOps.length > 0) {
+    await TeamModel.bulkWrite(bulkOps, { ordered: true });
+  }
   await Tournament.findByIdAndUpdate(tournamentId, { standingsUpdatedAt: now });
+
   return teams;
 };
 
-const performRecalculateWithTransaction = async (
-  tournamentId,
-  { Team: TeamModel = Team, Match: MatchModel = Match } = {}
-) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    const { teams, matches, teamMap } = await loadTeamsForStandingsRecalc(
-      tournamentId,
-      { Team: TeamModel, Match: MatchModel },
-      session
-    );
-
-    applyCompletedMatchesToTeams(matches, teamMap, tournamentId);
-
-    const now = new Date();
-
-    await Promise.all(
-      teams.map((team) => {
-        team.stats.netRunRate = calcNetRunRate(team.stats);
-        team.markModified("stats");
-        return team.save({ session });
-      })
-    );
-
-    await Tournament.findByIdAndUpdate(
-      tournamentId,
-      { standingsUpdatedAt: now },
-      { session }
-    );
-
-    await session.commitTransaction();
-    return teams;
-  } catch (err) {
-    await session.abortTransaction();
-    throw err;
-  } finally {
-    session.endSession();
-  }
-};
+const performRecalculate = async (tournamentId, deps = {}) =>
+  withWriteConflictRetry(`standings recalc ${tournamentId}`, () =>
+    persistStandingsRecalc(tournamentId, deps)
+  );
 
 /**
  * Force a full rebuild from every completed/cancelled match in the tournament.
- * Use for legacy data or manual recovery — not required for normal reads.
+ * Uses the same per-tournament queue as normal recalculation (no concurrent writes).
  */
 export const rebuildTournamentStandings = async (tournamentId, deps = {}) => {
-  const key = String(tournamentId);
-  inflightRecalc.delete(key);
   console.log(`[standings] Rebuild requested for tournament ${tournamentId}`);
-  await performRecalculate(tournamentId, deps);
+  await recalculateTournamentStandings(tournamentId, deps, { force: true });
   if (await standingsStatsMismatch(tournamentId, deps)) {
     console.warn(
       `[standings] Rebuild finished but stats still mismatch tournament ${tournamentId} — check team links`
@@ -479,17 +470,21 @@ export const rebuildTournamentStandings = async (tournamentId, deps = {}) => {
 
 /**
  * Full rebuild of tournament standings. Concurrent calls for the same tournament
- * share one in-flight operation, then re-run if a newer completed match was missed.
+ * share one in-flight operation, then re-run once if data changed during the write.
  */
-export const recalculateTournamentStandings = async (tournamentId, deps = {}, depth = 0) => {
+export const recalculateTournamentStandings = async (tournamentId, deps = {}, third = 0) => {
+  const { depth, force } = normalizeRecalcOptions(third);
   const key = String(tournamentId);
 
   if (inflightRecalc.has(key)) {
     await inflightRecalc.get(key);
-    if (depth < 3 && (await needsStandingsRecalc(tournamentId, deps))) {
-      return recalculateTournamentStandings(tournamentId, deps, depth + 1);
+    if (force) {
+      // fall through — caller requested an explicit rebuild after the in-flight write
+    } else if (depth < 2 && (await needsStandingsRecalc(tournamentId, deps))) {
+      return recalculateTournamentStandings(tournamentId, deps, { depth: depth + 1 });
+    } else {
+      return;
     }
-    return;
   }
 
   const promise = performRecalculate(tournamentId, deps).finally(() => {
@@ -499,8 +494,8 @@ export const recalculateTournamentStandings = async (tournamentId, deps = {}, de
   inflightRecalc.set(key, promise);
   await promise;
 
-  if (depth < 3 && (await needsStandingsRecalc(tournamentId, deps))) {
-    return recalculateTournamentStandings(tournamentId, deps, depth + 1);
+  if (!force && depth < 2 && (await needsStandingsRecalc(tournamentId, deps))) {
+    return recalculateTournamentStandings(tournamentId, deps, { depth: depth + 1 });
   }
 };
 
@@ -512,15 +507,12 @@ export const getTournamentStandings = async (
   { recalculate = false, Team: TeamModel = Team, Match: MatchModel = Match } = {}
 ) => {
   const deps = { Team: TeamModel, Match: MatchModel };
-  let stale = recalculate || (await needsStandingsRecalc(tournamentId, deps));
-  if (stale) {
-    await recalculateTournamentStandings(tournamentId, deps);
-  }
+  const stale = recalculate || (await needsStandingsRecalc(tournamentId, deps));
 
-  // Safety net: legacy tournaments may have stale timestamps but wrong stats.
-  if (!recalculate && (await standingsStatsMismatch(tournamentId, deps))) {
-    console.log(`[standings] Forcing rebuild for tournament ${tournamentId} after mismatch detected on read`);
-    await rebuildTournamentStandings(tournamentId, deps);
+  if (stale) {
+    await recalculateTournamentStandings(tournamentId, deps, { force: recalculate });
+  } else if (!recalculate && (await standingsStatsMismatch(tournamentId, deps))) {
+    await recalculateTournamentStandings(tournamentId, deps, { force: true });
   }
 
   const tournament = await Tournament.findById(tournamentId)

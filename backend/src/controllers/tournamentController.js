@@ -24,7 +24,6 @@ import {
 } from "../utils/tournamentStatus.js";
 import {
   recalculateTournamentStandings,
-  rebuildTournamentStandings,
   getTournamentStandings as fetchTournamentStandings,
   loadTournamentTeams,
 } from "../services/pointsTableService.js";
@@ -655,7 +654,7 @@ export const rebuildTournamentStandingsHandler = asyncHandler(async (req, res) =
     throw new ApiError(400, "Cannot rebuild standings for an archived tournament");
   }
 
-  await rebuildTournamentStandings(tournament._id, { Team, Match });
+  await recalculateTournamentStandings(tournament._id, { Team, Match }, { force: true });
   const standings = await fetchTournamentStandings(tournament._id);
 
   res.json({
