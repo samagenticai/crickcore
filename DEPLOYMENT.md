@@ -65,6 +65,12 @@ cd frontend && npm install && npm run dev
 
 Cloudinary is required for all image uploads (local disk storage is not supported).
 
+Run data migrations manually when needed (not on every serverless cold start):
+
+```bash
+cd backend && npm run migrate
+```
+
 ## Production checklist
 
 - [ ] All required env vars set in Vercel

@@ -34,6 +34,7 @@ import {
 import { createCorsOriginChecker } from "./config/cors.js";
 import { requestTiming } from "./middleware/requestTiming.js";
 import { getDatabaseState, pingDatabase } from "./config/db.js";
+import { getBootstrapState } from "./bootstrap.js";
 
 const SERVER_BOOT_ID = `${process.pid}-${Date.now()}`;
 const profileRouteManifest = assertProfileRoutesRegistered(profileRoutes);
@@ -152,6 +153,7 @@ app.get("/api/health", async (_req, res) => {
     pid: process.pid,
     db,
     dbPing,
+    bootstrap: getBootstrapState(),
     profile: {
       mounted: true,
       routes: getProfileRouteManifest(profileRoutes).map(

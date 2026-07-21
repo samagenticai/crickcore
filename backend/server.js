@@ -6,7 +6,7 @@ dns.setDefaultResultOrder("ipv4first");
 dotenv.config();
 
 import app, { profileRouteManifest } from "./src/app.js";
-import { runBootstrap } from "./src/bootstrap.js";
+import { ensureDatabaseReady, runStartupMigrations } from "./src/bootstrap.js";
 import { printProfileRoutes } from "./src/utils/assertProfileRoutes.js";
 
 const PORT = Number(process.env.PORT) || 5000;
@@ -61,7 +61,7 @@ function registerShutdown(server) {
 
 async function main() {
   try {
-    await runBootstrap();
+    await ensureDatabaseReady();
 
     const server = http.createServer(app);
     await listenOnce(server, PORT, HOST);
@@ -76,6 +76,10 @@ async function main() {
     );
 
     registerShutdown(server);
+
+    runStartupMigrations().catch((err) => {
+      console.error("[bootstrap] Background migrations failed:", err.message);
+    });
   } catch (err) {
     if (err?.code === "EADDRINUSE") {
       console.error(`\n[FATAL] Port ${PORT} is already in use by another process.`);

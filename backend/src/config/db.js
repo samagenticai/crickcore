@@ -16,12 +16,14 @@ const DEFAULT_OPTIONS = {
 };
 
 let listenersRegistered = false;
+let connectPromise = null;
 
 function registerConnectionListeners() {
   if (listenersRegistered) return;
   listenersRegistered = true;
 
   mongoose.connection.on("disconnected", () => {
+    connectPromise = null;
     console.warn("[MongoDB] disconnected — waiting for driver reconnect");
   });
 
@@ -30,11 +32,21 @@ function registerConnectionListeners() {
   });
 
   mongoose.connection.on("error", (err) => {
+    connectPromise = null;
     console.error("[MongoDB] connection error:", err.message);
   });
 }
 
 const connectDB = async () => {
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (connectPromise) {
+    await connectPromise;
+    return mongoose.connection;
+  }
+
   const uri = process.env.MONGODB_URI;
   const dbName = process.env.MONGODB_DATABASE || "cricket_tournament";
 
@@ -44,12 +56,19 @@ const connectDB = async () => {
 
   registerConnectionListeners();
 
-  await mongoose.connect(uri, {
+  connectPromise = mongoose.connect(uri, {
     ...DEFAULT_OPTIONS,
     dbName,
   });
 
-  console.log(`MongoDB connected: ${mongoose.connection.host}/${mongoose.connection.name}`);
+  try {
+    await connectPromise;
+    console.log(`MongoDB connected: ${mongoose.connection.host}/${mongoose.connection.name}`);
+    return mongoose.connection;
+  } catch (err) {
+    connectPromise = null;
+    throw err;
+  }
 };
 
 export async function pingDatabase() {
