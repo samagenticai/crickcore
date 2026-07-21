@@ -33,23 +33,32 @@ const TOURNAMENT_STATUS = {
 import { tournamentVenueLabel } from "../utils/tournamentVenue";
 
 export default function PublicTournamentDetailsPage() {
-  const { id } = useParams();
+  const { tournamentId } = useParams();
   const [tournament, setTournament] = useState(null);
   const [fixtures, setFixtures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!id) return;
+    if (!tournamentId) {
+      if (!silent) {
+        setLoading(false);
+        setError("Invalid tournament link");
+      }
+      return;
+    }
     if (!silent) setLoading(true);
     setError("");
     try {
       const [tRes, fRes] = await Promise.all([
-        publicAPI.getTournament(id),
-        publicAPI.getFixtures(id),
+        publicAPI.getTournament(tournamentId),
+        publicAPI.getFixtures(tournamentId),
       ]);
-      setTournament(tRes.data.data);
-      setFixtures(fRes.data.data || []);
+      setTournament(tRes.data?.data ?? null);
+      setFixtures(fRes.data?.data || []);
+      if (!tRes.data?.data && !silent) {
+        setError("Tournament not found");
+      }
     } catch (err) {
       if (!silent) {
         setError(err?.message || "Failed to load tournament");
@@ -59,7 +68,7 @@ export default function PublicTournamentDetailsPage() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [id]);
+  }, [tournamentId]);
 
   useEffect(() => {
     fetchData();
@@ -115,7 +124,7 @@ export default function PublicTournamentDetailsPage() {
 
   return (
     <motion.div
-      initial="hidden"
+      initial={false}
       animate="visible"
       variants={pageReveal}
       className="min-h-screen safe-overflow bg-[radial-gradient(circle_at_top_left,_rgba(22,163,74,0.06),transparent_28%),linear-gradient(135deg,_#f8fafc_0%,_#ffffff_100%)]"
@@ -215,7 +224,7 @@ export default function PublicTournamentDetailsPage() {
                   <Swords className="w-5 h-5 text-primary" />
                   <h2 className="text-lg font-bold text-secondary">Fixtures</h2>
                   <Link
-                    to={`/viewer/${id}/points`}
+                    to={`/viewer/${tournamentId}/points`}
                     className="inline-flex items-center gap-1.5 ml-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/15 transition-colors"
                   >
                     <BarChart3 className="w-3.5 h-3.5" />
@@ -244,14 +253,22 @@ export default function PublicTournamentDetailsPage() {
                         match={match}
                         tournamentName={tournament.tournamentName}
                         tournament={tournament}
-                        tournamentId={id}
+                        tournamentId={tournamentId}
                       />
                     ))}
                   </div>
                 )}
               </div>
             </div>
-          ) : null}
+          ) : (
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-8 text-center max-w-lg mx-auto">
+              <p className="text-sm text-text-muted font-medium">Tournament not found or unavailable.</p>
+              <Link to="/viewer" className="inline-flex items-center gap-2 mt-4 text-sm font-semibold text-primary hover:underline">
+                <ArrowLeft className="w-4 h-4" />
+                Back to tournaments
+              </Link>
+            </div>
+          )}
         </div>
       </main>
     </motion.div>

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Calendar, Clock, MapPin } from "lucide-react";
 import { battingTeamName, hasMatchResult } from "../../utils/liveScore";
 import { formatTossViewerLine } from "../../utils/toss";
+import { matchVenueLabel } from "../../utils/matchVenue";
 import { VIEWER_CARD, VIEWER_LIVE_BADGE } from "./viewerUi";
 
 const MATCH_STATUS = {
@@ -22,19 +23,15 @@ const fmtDate = (d) =>
 
 const teamLabel = (team, slot) => (team && team.name) || slot?.label || "TBD";
 
-const matchVenue = (match, tournament) => {
-  if (match.venue?.name) {
-    return match.venue.city ? `${match.venue.name}, ${match.venue.city}` : match.venue.name;
-  }
-  return tournament?.groundName || tournament?.venue || tournament?.city || "Venue TBD";
-};
+const matchVenue = (match, tournament) => matchVenueLabel(match, tournament);
 
 export default function PublicFixtureCard({ match, tournamentName, tournament, tournamentId }) {
   const displayStatus = mapMatchStatus(match.status);
   const statusStyle = MATCH_STATUS[displayStatus] || MATCH_STATUS.Upcoming;
   const isLive = displayStatus === "Live";
   const tossText = formatTossViewerLine(match);
-  const href = tournamentId ? `/viewer/${tournamentId}/match/${match._id}` : null;
+  const href =
+    tournamentId && match?._id ? `/viewer/${tournamentId}/match/${match._id}` : null;
   const ls = match.liveScore;
   const showScore = match.status === "Live" && ls?.isInitialized;
   const showResult = hasMatchResult(match);
@@ -57,7 +54,7 @@ export default function PublicFixtureCard({ match, tournamentName, tournament, t
         {teamLabel(match.teamB, match.teamBSlot)}
       </p>
 
-      {showResult && (
+      {showResult && match.matchResult?.innings?.length > 0 && (
         <div className="mt-2 space-y-1">
           {match.matchResult.innings.map((inn) => (
             <p key={inn.inningsNumber} className="text-sm font-bold text-secondary tabular-nums">

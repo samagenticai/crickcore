@@ -22,43 +22,46 @@ function SummaryCard({ label, value, sub, highlight }) {
 }
 
 function InningsBlock({ innings }) {
+  const extras = innings?.extras ?? {};
+  const scorecard = innings?.scorecard ?? {};
+
   return (
     <div className={`${VIEWER_CARD} p-4 sm:p-5 lg:p-6 space-y-6 sm:space-y-8 min-w-0`}>
       <div className="flex flex-wrap items-end justify-between gap-3 min-w-0">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
-            Innings {innings.inningsNumber}
+            Innings {innings?.inningsNumber ?? "—"}
           </p>
-          <h3 className="text-lg font-extrabold text-secondary mt-1 break-words">{innings.battingTeamName}</h3>
-          <p className="text-xs text-text-muted mt-0.5 break-words">vs {innings.bowlingTeamName}</p>
+          <h3 className="text-lg font-extrabold text-secondary mt-1 break-words">{innings?.battingTeamName || "—"}</h3>
+          <p className="text-xs text-text-muted mt-0.5 break-words">vs {innings?.bowlingTeamName || "—"}</p>
         </div>
         <div className="text-right shrink-0">
           <p className="text-2xl sm:text-3xl font-extrabold text-secondary tabular-nums leading-none">
-            {innings.score}
+            {innings?.score ?? "—"}
           </p>
           <p className="text-xs text-text-muted mt-1 tabular-nums">
-            {innings.overs} overs · RR {innings.runRate}
+            {innings?.overs ?? "0.0"} overs · RR {innings?.runRate ?? "—"}
           </p>
         </div>
       </div>
 
-      <ViewerBattingTable batting={innings.scorecard.batting} title="Batting" icon={Users} />
+      <ViewerBattingTable batting={scorecard.batting} title="Batting" icon={Users} />
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-muted border-t border-slate-100 pt-3">
         <span>
-          Extras: <strong className="text-secondary tabular-nums">{innings.extras.total}</strong>
-          {" "}(w {innings.extras.wides}, nb {innings.extras.noBalls}, b {innings.extras.byes}, lb{" "}
-          {innings.extras.legByes})
+          Extras: <strong className="text-secondary tabular-nums">{extras.total ?? 0}</strong>
+          {" "}(w {extras.wides ?? 0}, nb {extras.noBalls ?? 0}, b {extras.byes ?? 0}, lb{" "}
+          {extras.legByes ?? 0})
         </span>
         <span>
-          4s: <strong className="text-secondary tabular-nums">{innings.totalFours}</strong>
+          4s: <strong className="text-secondary tabular-nums">{innings?.totalFours ?? 0}</strong>
         </span>
         <span>
-          6s: <strong className="text-secondary tabular-nums">{innings.totalSixes}</strong>
+          6s: <strong className="text-secondary tabular-nums">{innings?.totalSixes ?? 0}</strong>
         </span>
       </div>
 
-      <ViewerBowlingTable bowling={innings.scorecard.bowling} title="Bowling" icon={TrendingUp} />
+      <ViewerBowlingTable bowling={scorecard.bowling} title="Bowling" icon={TrendingUp} />
     </div>
   );
 }
@@ -102,11 +105,11 @@ export default function PublicMatchResult({ matchResult, match }) {
                   Match Completed
                 </p>
                 <p className="text-base sm:text-lg font-extrabold break-words">
-                  {summary.resultSummary || "Result"}
+                  {summary?.resultSummary || "Result"}
                 </p>
               </div>
             </div>
-            {summary.winner?.logo && (
+            {summary?.winner?.logo && (
               <img
                 src={mediaUrl(summary.winner.logo)}
                 alt=""
@@ -117,51 +120,51 @@ export default function PublicMatchResult({ matchResult, match }) {
         </div>
 
         <div className="p-4 sm:p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 min-w-0">
-          <SummaryCard label="Winner" value={summary.winner?.name} highlight />
-          <SummaryCard label="Runner-up" value={summary.runnerUp?.name} />
+          <SummaryCard label="Winner" value={summary?.winner?.name} highlight />
+          <SummaryCard label="Runner-up" value={summary?.runnerUp?.name} />
           <SummaryCard
             label="Player of the Match"
-            value={summary.playerOfTheMatch?.name}
-            sub={summary.playerOfTheMatch?.highlight}
-            highlight={Boolean(summary.playerOfTheMatch)}
+            value={summary?.playerOfTheMatch?.name}
+            sub={summary?.playerOfTheMatch?.highlight}
+            highlight={Boolean(summary?.playerOfTheMatch)}
           />
           <SummaryCard
             label="Highest Run Scorer"
-            value={summary.highestRunScorer?.name}
+            value={summary?.highestRunScorer?.name}
             sub={
-              summary.highestRunScorer
+              summary?.highestRunScorer
                 ? `${summary.highestRunScorer.runs} (${summary.highestRunScorer.balls})`
                 : null
             }
           />
           <SummaryCard
             label="Best Bowler"
-            value={summary.bestBowler?.name}
+            value={summary?.bestBowler?.name}
             sub={
-              summary.bestBowler
+              summary?.bestBowler
                 ? `${summary.bestBowler.wickets}/${summary.bestBowler.runs} · Econ ${Number(summary.bestBowler.economy || 0).toFixed(2)}`
                 : null
             }
           />
-          <SummaryCard label="Best Partnership" value={summary.bestPartnership?.label || "—"} />
-          <SummaryCard label="Total Fours" value={String(summary.totalFours ?? 0)} />
-          <SummaryCard label="Total Sixes" value={String(summary.totalSixes ?? 0)} />
+          <SummaryCard label="Best Partnership" value={summary?.bestPartnership?.label || "—"} />
+          <SummaryCard label="Total Fours" value={String(summary?.totalFours ?? 0)} />
+          <SummaryCard label="Total Sixes" value={String(summary?.totalSixes ?? 0)} />
           <SummaryCard
             label="Extras"
-            value={String(summary.extras?.total ?? 0)}
-            sub={`W ${summary.extras?.wides ?? 0} · NB ${summary.extras?.noBalls ?? 0} · B ${summary.extras?.byes ?? 0} · LB ${summary.extras?.legByes ?? 0}`}
+            value={String(summary?.extras?.total ?? 0)}
+            sub={`W ${summary?.extras?.wides ?? 0} · NB ${summary?.extras?.noBalls ?? 0} · B ${summary?.extras?.byes ?? 0} · LB ${summary?.extras?.legByes ?? 0}`}
           />
-          <SummaryCard label="Toss" value={summary.tossResult || "Not recorded"} />
+          <SummaryCard label="Toss" value={summary?.tossResult || "Not recorded"} />
           <SummaryCard
             label="Venue"
-            value={summary.venue?.label || match?.venue?.name || "—"}
-            sub={summary.venue?.address}
+            value={summary?.venue?.label || match?.venue?.venueName || match?.venue?.name || "—"}
+            sub={summary?.venue?.address}
           />
           <SummaryCard
             label="Date & Time"
-            value={formatMatchDateTime(summary.matchDate, summary.matchTime)}
+            value={formatMatchDateTime(summary?.matchDate, summary?.matchTime)}
           />
-          {summary.round && <SummaryCard label="Round" value={summary.round} />}
+          {summary?.round && <SummaryCard label="Round" value={summary.round} />}
         </div>
       </div>
 

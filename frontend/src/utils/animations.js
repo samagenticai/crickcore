@@ -44,11 +44,13 @@ export const staggerContainer = {
   },
 };
 
+/** Page enter animation — keeps opacity at 1 so content is never invisible if motion fails on route change. */
 export const pageReveal = {
-  hidden: { opacity: 0 },
+  hidden: { opacity: 1, y: 12 },
   visible: {
     opacity: 1,
-    transition: { duration: 0.6, ease: "easeOut" },
+    y: 0,
+    transition: { duration: 0.35, ease: "easeOut" },
   },
 };
 

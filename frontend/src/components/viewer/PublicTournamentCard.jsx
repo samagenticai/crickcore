@@ -18,6 +18,7 @@ const fmtDate = (d) =>
 
 export default function PublicTournamentCard({ tournament, index = 0 }) {
   const { tournamentName, tournamentLogo, bannerImage, startDate, endDate, hasLiveMatch } = tournament;
+  const tournamentId = tournament?._id?.toString?.() ?? tournament?._id;
   const displayStatus = getEffectiveTournamentStatus(tournament, { hasLiveMatch });
   const banner = mediaUrl(bannerImage);
   const logo = mediaUrl(tournamentLogo);
@@ -32,7 +33,7 @@ export default function PublicTournamentCard({ tournament, index = 0 }) {
       whileHover="hover"
       className="h-full"
     >
-      <Link to={`/viewer/${tournament._id}`} className="block h-full group">
+      <Link to={tournamentId ? `/viewer/${tournamentId}` : "/viewer"} className="block h-full group">
         <PremiumCard interactive={false} padding="none" className="h-full overflow-hidden rounded-[14px] group-hover:border-primary/20 transition-all duration-300 group-hover:shadow-[0_8px_24px_rgba(15,23,42,0.08)]">
         <div className="relative h-36 sm:h-40 bg-slate-100">
           {banner ? (

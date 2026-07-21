@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "./context/AuthContext";
 import OrganizerRoute from "./routes/OrganizerRoute";
@@ -7,6 +7,7 @@ import AdminRoute from "./routes/AdminRoute";
 import GuestRoute from "./routes/GuestRoute";
 import RoleSelectionModal from "./components/RoleSelectionModal";
 import CheckoutResume from "./components/CheckoutResume";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const PageLoader = () => (
   <div className="min-h-[40vh] flex items-center justify-center">
@@ -63,6 +64,19 @@ function Lazy({ children }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>;
 }
 
+function ViewerLayout() {
+  return (
+    <ErrorBoundary
+      title="Viewer page error"
+      message="We couldn't load this tournament page. Please go back and try again."
+      backTo="/viewer"
+      backLabel="Back to tournaments"
+    >
+      <Outlet />
+    </ErrorBoundary>
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -75,10 +89,12 @@ export default function App() {
             <Route path="/free-trial" element={<Navigate to="/#pricing" replace />} />
             <Route path="/payment/success" element={<PaymentSuccessPage />} />
             <Route path="/payment/cancel" element={<PaymentCancelPage />} />
-            <Route path="/viewer" element={<PublicViewerPage />} />
-            <Route path="/viewer/:tournamentId/match/:matchId" element={<PublicMatchDetailsPage />} />
-            <Route path="/viewer/:id/points" element={<PublicPointsTablePage />} />
-            <Route path="/viewer/:id" element={<PublicTournamentDetailsPage />} />
+            <Route path="/viewer" element={<ViewerLayout />}>
+              <Route index element={<PublicViewerPage />} />
+              <Route path=":tournamentId/match/:matchId" element={<PublicMatchDetailsPage />} />
+              <Route path=":tournamentId/points" element={<PublicPointsTablePage />} />
+              <Route path=":tournamentId" element={<PublicTournamentDetailsPage />} />
+            </Route>
             <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
             <Route path="/register" element={<GuestRoute><Register /></GuestRoute>} />
             <Route path="/public" element={<Navigate to="/viewer" replace />} />

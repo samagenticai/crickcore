@@ -5,7 +5,6 @@ import Player from "../models/Player.js";
 import mongoose from "mongoose";
 import { ApiError, asyncHandler } from "../utils/helpers.js";
 import { enrichMatchLiveScore, enrichMatchesLiveScore } from "../utils/liveScore.js";
-import { syncTournamentStatus } from "../utils/tournamentStatus.js";
 import { getTournamentStandings as fetchTournamentStandings } from "../services/pointsTableService.js";
 import { getMatchSummary } from "../services/matchSummaryService.js";
 
@@ -37,19 +36,7 @@ export const getPublicTournament = asyncHandler(async (req, res) => {
 
   if (!tournament) throw new ApiError(404, "Tournament not found");
 
-  await syncTournamentStatus(tournament._id);
-
-  const updated = await Tournament.findOne(publicTournamentFilter(req.params.id))
-    .select(
-      "tournamentName tournamentLogo bannerImage description tournamentType ballType startDate endDate status city groundName venue sponsors"
-    )
-    .populate("venue", "venueName groundAddress city state country pitchType capacity")
-    .populate(
-      "sponsors",
-      "sponsorName companyName sponsorType logo website status contactPerson"
-    );
-
-  res.json({ success: true, data: updated || tournament });
+  res.json({ success: true, data: tournament });
 });
 
 const populatePublicMatch = (query) =>

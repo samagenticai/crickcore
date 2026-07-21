@@ -12,23 +12,32 @@ import { pageReveal } from "../utils/animations";
 import { getEffectiveTournamentStatus } from "../utils/tournamentViewer";
 
 export default function PublicPointsTablePage() {
-  const { id } = useParams();
+  const { tournamentId } = useParams();
   const [tournament, setTournament] = useState(null);
   const [fixtures, setFixtures] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [pageError, setPageError] = useState("");
 
   const fetchMeta = useCallback(async (silent = false) => {
-    if (!id) return;
+    if (!tournamentId) {
+      if (!silent) {
+        setPageLoading(false);
+        setPageError("Invalid tournament link");
+      }
+      return;
+    }
     if (!silent) setPageLoading(true);
     setPageError("");
     try {
       const [tRes, fRes] = await Promise.all([
-        publicAPI.getTournament(id),
-        publicAPI.getFixtures(id),
+        publicAPI.getTournament(tournamentId),
+        publicAPI.getFixtures(tournamentId),
       ]);
-      setTournament(tRes.data.data);
-      setFixtures(fRes.data.data || []);
+      setTournament(tRes.data?.data ?? null);
+      setFixtures(fRes.data?.data || []);
+      if (!tRes.data?.data && !silent) {
+        setPageError("Tournament not found");
+      }
     } catch (err) {
       if (!silent) {
         setPageError(err?.message || "Failed to load tournament");
@@ -38,7 +47,7 @@ export default function PublicPointsTablePage() {
     } finally {
       if (!silent) setPageLoading(false);
     }
-  }, [id]);
+  }, [tournamentId]);
 
   useEffect(() => {
     fetchMeta();
@@ -53,7 +62,7 @@ export default function PublicPointsTablePage() {
   const pollMs = hasLiveMatch || isLive ? 8000 : 12000;
 
   useViewerAutoRefresh(() => fetchMeta(true), {
-    enabled: Boolean(id) && !pageError,
+    enabled: Boolean(tournamentId) && !pageError,
     intervalMs: pollMs,
   });
 
@@ -62,15 +71,15 @@ export default function PublicPointsTablePage() {
     qualifyingSpots,
     loading: standingsLoading,
     error: standingsError,
-  } = useStandings(id, {
+  } = useStandings(tournamentId, {
     public: true,
-    enabled: Boolean(id) && !pageError,
+    enabled: Boolean(tournamentId) && !pageError,
     pollMs,
   });
 
   return (
     <motion.div
-      initial="hidden"
+      initial={false}
       animate="visible"
       variants={pageReveal}
       className="min-h-screen safe-overflow bg-[radial-gradient(circle_at_top_left,_rgba(22,163,74,0.06),transparent_28%),linear-gradient(135deg,_#f8fafc_0%,_#ffffff_100%)]"
@@ -78,7 +87,7 @@ export default function PublicPointsTablePage() {
       <PublicViewerHeader
         title={tournament?.tournamentName ? `${tournament.tournamentName} — Points Table` : "Points Table"}
         subtitle={tournament ? `${tournament.tournamentType || "Cricket"} standings` : undefined}
-        backTo={`/viewer/${id}`}
+        backTo={`/viewer/${tournamentId || ""}`}
         backLabel="Tournament"
       />
 
@@ -117,7 +126,7 @@ export default function PublicPointsTablePage() {
                   )}
                 </div>
                 <Link
-                  to={`/viewer/${id}`}
+                  to={`/viewer/${tournamentId}`}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline"
                 >
                   <ArrowLeft className="w-4 h-4" />

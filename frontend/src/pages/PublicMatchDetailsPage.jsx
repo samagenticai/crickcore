@@ -39,7 +39,13 @@ export default function PublicMatchDetailsPage() {
   const [tab, setTab] = useState("playingXI");
 
   const fetchMatchData = useCallback(async (silent = false) => {
-    if (!tournamentId || !matchId) return;
+    if (!tournamentId || !matchId) {
+      if (!silent) {
+        setLoading(false);
+        setError(!tournamentId ? "Invalid tournament link" : "Invalid match link");
+      }
+      return;
+    }
     if (!silent) setLoading(true);
     setError("");
     try {
@@ -47,9 +53,12 @@ export default function PublicMatchDetailsPage() {
         publicAPI.getTournament(tournamentId),
         publicAPI.getMatch(tournamentId, matchId),
       ]);
-      const m = mRes.data.data;
-      setTournament(tRes.data.data);
+      const m = mRes.data?.data ?? null;
+      setTournament(tRes.data?.data ?? null);
       setMatch(m);
+      if (!m && !silent) {
+        setError("Match not found");
+      }
       if (!silent) {
         const defaultTab = hasMatchResult(m)
           ? "liveScore"
@@ -189,7 +198,7 @@ export default function PublicMatchDetailsPage() {
 
   return (
     <motion.div
-      initial="hidden"
+      initial={false}
       animate="visible"
       variants={pageReveal}
       className="min-h-screen safe-overflow bg-[radial-gradient(circle_at_top_left,_rgba(22,163,74,0.06),transparent_28%),linear-gradient(135deg,_#f8fafc_0%,_#ffffff_100%)]"

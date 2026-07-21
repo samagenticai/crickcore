@@ -6,6 +6,7 @@ import { hasLiveScoring } from "../../utils/liveScore";
 import { formatTossViewerLine } from "../../utils/toss";
 import { formatMatchUmpiresLine } from "../../utils/umpireDisplay";
 import { formatScoredByLine } from "../../utils/scorerDisplay";
+import { matchVenueLabel } from "../../utils/matchVenue";
 import { VIEWER_CARD, VIEWER_LIVE_BADGE } from "./viewerUi";
 
 const fmtDate = (d) =>
@@ -17,12 +18,7 @@ const STATUS_CLASS = {
   Completed: "bg-emerald-50 text-emerald-700 border-emerald-200",
 };
 
-const matchVenue = (match, tournament) => {
-  if (match.venue?.name) {
-    return match.venue.city ? `${match.venue.name}, ${match.venue.city}` : match.venue.name;
-  }
-  return tournament?.groundName || tournament?.venue || tournament?.city || "Venue TBD";
-};
+const matchVenue = (match, tournament) => matchVenueLabel(match, tournament);
 
 export default function PublicMatchHeader({ match, tournament, belowScoreboard = null }) {
   const displayStatus = mapMatchStatus(match.status);
@@ -171,11 +167,7 @@ export function PublicMatchInfo({ match, tournament }) {
         {
           icon: MapPin,
           label: "Venue",
-          value: match.venue?.name
-            ? match.venue.city
-              ? `${match.venue.name}, ${match.venue.city}`
-              : match.venue.name
-            : tournament?.groundName || tournament?.venue || tournament?.city || "TBD",
+          value: matchVenueLabel(match, tournament),
         },
       ];
 
