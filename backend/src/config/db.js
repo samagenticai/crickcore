@@ -2,7 +2,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+import dns from "dns";
 import mongoose from "mongoose";
+
+// Prefer IPv4 for Atlas on Vercel/serverless (prevents long IPv6 resolution hangs).
+dns.setDefaultResultOrder("ipv4first");
 
 const isServerless =
   Boolean(process.env.VERCEL) ||
@@ -12,6 +16,7 @@ const isServerless =
 const DEFAULT_OPTIONS = {
   maxPoolSize: isServerless ? 5 : 10,
   minPoolSize: isServerless ? 0 : 1,
+  family: 4,
   serverSelectionTimeoutMS: 8_000,
   socketTimeoutMS: 20_000,
   connectTimeoutMS: 8_000,

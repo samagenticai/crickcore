@@ -33,7 +33,7 @@ import {
 } from "./utils/assertProfileRoutes.js";
 import { createCorsOriginChecker } from "./config/cors.js";
 import { requestTiming } from "./middleware/requestTiming.js";
-import { attachDatabase, requestPipelineLogger } from "./middleware/requestPipeline.js";
+import { attachDatabase, requestPipelineLogger, traceStep } from "./middleware/requestPipeline.js";
 import { getDatabaseState, pingDatabase } from "./config/db.js";
 import { getBootstrapState } from "./bootstrap.js";
 
@@ -41,6 +41,38 @@ const SERVER_BOOT_ID = `${process.pid}-${Date.now()}`;
 const profileRouteManifest = assertProfileRoutesRegistered(profileRoutes);
 
 const app = express();
+
+// Health check FIRST — must not wait on rate limits, body parsers, or MongoDB.
+app.get("/api/health", async (_req, res) => {
+  let db = getDatabaseState();
+  let dbPing = null;
+
+  try {
+    if (db.readyState === 1) {
+      dbPing = await pingDatabase();
+    } else {
+      dbPing = { ok: false, state: db.readyState, skipped: "not connected" };
+    }
+  } catch (err) {
+    dbPing = { ok: false, error: err.message };
+  }
+
+  res.json({
+    success: true,
+    message: "Cricket Tournament API is running",
+    bootId: SERVER_BOOT_ID,
+    pid: process.pid,
+    db,
+    dbPing,
+    bootstrap: getBootstrapState(),
+    profile: {
+      mounted: true,
+      routes: getProfileRouteManifest(profileRoutes).map(
+        (r) => `${r.methods.join("|")} ${r.fullPath}`
+      ),
+    },
+  });
+});
 
 // Required behind Vercel/reverse proxies so req.ip, cookies, and rate limits work.
 if (process.env.VERCEL || process.env.NODE_ENV === "production") {
@@ -62,13 +94,12 @@ const rateLimitDefaults = {
   keyGenerator: rateLimitKey,
 };
 
-app.use(
-  helmet({
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
-);
+app.use(traceStep("helmet"), helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
 
 app.use(
+  traceStep("cors"),
   cors({
     origin: createCorsOriginChecker(),
     credentials: true,
@@ -84,6 +115,7 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: isProduction ? 400 : 10_000,
   skip: (req) => {
+    if (req.path === "/api/health") return true;
     if (
       req.path.startsWith("/api/scoring") ||
       req.path.startsWith("/api/public") ||
@@ -138,10 +170,10 @@ const publicReadLimiter = rateLimit({
   message: { success: false, message: "Too many requests, please try again later" },
 });
 
-app.use(limiter);
+app.use(traceStep("limiter"), limiter);
 app.use(requestPipelineLogger());
-app.use(requestTiming());
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(traceStep("timing"), requestTiming());
+app.use(traceStep("morgan"), morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Stripe webhook: raw body + DB (registered before JSON parser)
 app.post(
@@ -151,42 +183,11 @@ app.post(
   stripeWebhook
 );
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use(cookieParser());
+app.use(traceStep("json"), express.json({ limit: "10mb" }));
+app.use(traceStep("urlencoded"), express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(traceStep("cookieParser"), cookieParser());
 
-app.get("/api/health", async (_req, res) => {
-  let db = getDatabaseState();
-  let dbPing = null;
-
-  try {
-    if (db.readyState === 1) {
-      dbPing = await pingDatabase();
-    } else {
-      dbPing = { ok: false, state: db.readyState, skipped: "not connected" };
-    }
-  } catch (err) {
-    dbPing = { ok: false, error: err.message };
-  }
-
-  res.json({
-    success: true,
-    message: "Cricket Tournament API is running",
-    bootId: SERVER_BOOT_ID,
-    pid: process.pid,
-    db,
-    dbPing,
-    bootstrap: getBootstrapState(),
-    profile: {
-      mounted: true,
-      routes: getProfileRouteManifest(profileRoutes).map(
-        (r) => `${r.methods.join("|")} ${r.fullPath}`
-      ),
-    },
-  });
-});
-
-app.use("/api", attachDatabase);
+app.use("/api", traceStep("attachDatabase"), attachDatabase);
 
 app.use("/api/auth", authLimiter, authRoutes);
 // Profile APIs — must stay before app.use(notFound)

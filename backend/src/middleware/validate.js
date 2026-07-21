@@ -9,7 +9,7 @@ export const validate = (req, res, next) => {
       message: e.msg,
     }));
     const firstMessage = formatted[0]?.message || "Validation failed";
-    throw new ApiError(400, firstMessage, formatted);
+    return next(new ApiError(400, firstMessage, formatted));
   }
   next();
 };

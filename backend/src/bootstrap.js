@@ -1,8 +1,4 @@
 import connectDB, { getDatabaseState } from "./config/db.js";
-import { syncAllTournamentStatuses } from "./utils/tournamentStatus.js";
-import { migrateAllTournaments } from "./utils/dataMigration.js";
-import { migrateUserRoles } from "./utils/migrateUserRoles.js";
-import { scrubInvalidObjectIdRefs } from "./utils/scrubInvalidObjectIdRefs.js";
 import { validateEnvironment } from "./config/envCheck.js";
 
 let readyPromise = null;
@@ -27,6 +23,11 @@ export function ensureDatabaseReady() {
 
 /** Heavy one-time style migrations — must not block auth/API on serverless. */
 export async function runStartupMigrations() {
+  const { migrateUserRoles } = await import("./utils/migrateUserRoles.js");
+  const { scrubInvalidObjectIdRefs } = await import("./utils/scrubInvalidObjectIdRefs.js");
+  const { syncAllTournamentStatuses } = await import("./utils/tournamentStatus.js");
+  const { migrateAllTournaments } = await import("./utils/dataMigration.js");
+
   const roleUpdates = await migrateUserRoles();
   if (roleUpdates > 0) {
     console.log(`User role migration: normalized ${roleUpdates} account(s) to lowercase roles`);
