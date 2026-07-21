@@ -18,7 +18,6 @@ import { ApiError, asyncHandler } from "../utils/helpers.js";
 import { resolveUpload } from "../middleware/upload.js";
 import {
   finalizeTournamentIfComplete,
-  syncPublicTournamentStatuses,
   syncTournamentStatus,
   syncTournamentStatusesForUser,
   invalidateUserTournamentSyncCache,
@@ -329,8 +328,6 @@ export const getViewerTournaments = asyncHandler(async (req, res) => {
     delete query.status;
   }
   if (tournamentType) query.tournamentType = tournamentType;
-
-  await syncPublicTournamentStatuses();
 
   const skip = (Number(page) - 1) * Number(limit);
   const [tournaments, total] = await Promise.all([

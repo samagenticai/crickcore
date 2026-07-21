@@ -9,8 +9,9 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:5000',
+        target: `http://127.0.0.1:${process.env.VITE_BACKEND_PORT || 5000}`,
         changeOrigin: true,
+        timeout: 30_000,
       },
     },
   },

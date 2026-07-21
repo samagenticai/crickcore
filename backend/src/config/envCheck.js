@@ -17,7 +17,6 @@ export function validateEnvironment() {
 
   if (isProd) {
     const prodRequired = [
-      "CLIENT_URL",
       "CLOUDINARY_CLOUD_NAME",
       "CLOUDINARY_API_KEY",
       "CLOUDINARY_API_SECRET",
@@ -29,7 +28,11 @@ export function validateEnvironment() {
       );
     }
 
-    const prodRecommended = ["STRIPE_SECRET_KEY"];
+    if (!process.env.CLIENT_URL?.trim()) {
+      console.warn("[env] CLIENT_URL is not set — CORS may block browser requests.");
+    }
+
+    const prodRecommended = ["STRIPE_SECRET_KEY", "CLIENT_URL"];
     const missingProd = prodRecommended.filter((key) => !process.env[key]?.trim());
     if (missingProd.length) {
       console.warn(

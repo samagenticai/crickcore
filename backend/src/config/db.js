@@ -4,16 +4,24 @@ dotenv.config();
 
 import mongoose from "mongoose";
 
+const isServerless =
+  Boolean(process.env.VERCEL) ||
+  Boolean(process.env.VERCEL_URL) ||
+  Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
+
 const DEFAULT_OPTIONS = {
-  maxPoolSize: 10,
-  minPoolSize: 1,
-  serverSelectionTimeoutMS: 10_000,
-  socketTimeoutMS: 45_000,
-  connectTimeoutMS: 10_000,
+  maxPoolSize: isServerless ? 5 : 10,
+  minPoolSize: isServerless ? 0 : 1,
+  serverSelectionTimeoutMS: 8_000,
+  socketTimeoutMS: 20_000,
+  connectTimeoutMS: 8_000,
   heartbeatFrequencyMS: 10_000,
   retryWrites: true,
   retryReads: true,
 };
+
+mongoose.set("bufferCommands", false);
+mongoose.set("strictQuery", true);
 
 let listenersRegistered = false;
 let connectPromise = null;
@@ -24,7 +32,7 @@ function registerConnectionListeners() {
 
   mongoose.connection.on("disconnected", () => {
     connectPromise = null;
-    console.warn("[MongoDB] disconnected — waiting for driver reconnect");
+    console.warn("[MongoDB] disconnected");
   });
 
   mongoose.connection.on("reconnected", () => {
@@ -37,6 +45,15 @@ function registerConnectionListeners() {
   });
 }
 
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    }),
+  ]);
+}
+
 const connectDB = async () => {
   if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
@@ -44,7 +61,10 @@ const connectDB = async () => {
 
   if (connectPromise) {
     await connectPromise;
-    return mongoose.connection;
+    if (mongoose.connection.readyState === 1) {
+      return mongoose.connection;
+    }
+    connectPromise = null;
   }
 
   const uri = process.env.MONGODB_URI;
@@ -56,10 +76,16 @@ const connectDB = async () => {
 
   registerConnectionListeners();
 
-  connectPromise = mongoose.connect(uri, {
-    ...DEFAULT_OPTIONS,
-    dbName,
-  });
+  console.log("[MongoDB] connecting…");
+
+  connectPromise = withTimeout(
+    mongoose.connect(uri, {
+      ...DEFAULT_OPTIONS,
+      dbName,
+    }),
+    DEFAULT_OPTIONS.connectTimeoutMS + 2_000,
+    "MongoDB connect"
+  );
 
   try {
     await connectPromise;
@@ -67,6 +93,11 @@ const connectDB = async () => {
     return mongoose.connection;
   } catch (err) {
     connectPromise = null;
+    try {
+      await mongoose.disconnect();
+    } catch {
+      /* ignore */
+    }
     throw err;
   }
 };
@@ -77,7 +108,11 @@ export async function pingDatabase() {
   }
 
   const started = Date.now();
-  await mongoose.connection.db.admin().ping();
+  await withTimeout(
+    mongoose.connection.db.admin().ping(),
+    3_000,
+    "MongoDB ping"
+  );
   return { ok: true, latencyMs: Date.now() - started };
 }
 

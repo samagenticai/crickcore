@@ -69,6 +69,8 @@ export const errorHandler = (err, req, res, _next) => {
   if (
     err.name === "MongoNetworkError" ||
     err.name === "MongoServerSelectionError" ||
+    err.name === "MongoTimeoutError" ||
+    err.message?.includes("timed out after") ||
     err.code === "ECONNRESET"
   ) {
     statusCode = 503;

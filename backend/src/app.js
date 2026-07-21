@@ -33,6 +33,7 @@ import {
 } from "./utils/assertProfileRoutes.js";
 import { createCorsOriginChecker } from "./config/cors.js";
 import { requestTiming } from "./middleware/requestTiming.js";
+import { attachDatabase, requestPipelineLogger } from "./middleware/requestPipeline.js";
 import { getDatabaseState, pingDatabase } from "./config/db.js";
 import { getBootstrapState } from "./bootstrap.js";
 
@@ -40,6 +41,26 @@ const SERVER_BOOT_ID = `${process.pid}-${Date.now()}`;
 const profileRouteManifest = assertProfileRoutesRegistered(profileRoutes);
 
 const app = express();
+
+// Required behind Vercel/reverse proxies so req.ip, cookies, and rate limits work.
+if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+const rateLimitKey = (req) =>
+  req.ip ||
+  String(req.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    ?.trim() ||
+  req.socket?.remoteAddress ||
+  "anonymous";
+
+const rateLimitDefaults = {
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { ip: false },
+  keyGenerator: rateLimitKey,
+};
 
 app.use(
   helmet({
@@ -59,10 +80,9 @@ const isProduction = process.env.NODE_ENV === "production";
 const AUTH_RATE_LIMIT_MSG = "Too many auth attempts, please try again later";
 
 const limiter = rateLimit({
+  ...rateLimitDefaults,
   windowMs: 15 * 60 * 1000,
   max: isProduction ? 400 : 10_000,
-  standardHeaders: true,
-  legacyHeaders: false,
   skip: (req) => {
     if (
       req.path.startsWith("/api/scoring") ||
@@ -81,10 +101,9 @@ const limiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
+  ...rateLimitDefaults,
   windowMs: 15 * 60 * 1000,
   max: isProduction ? 30 : 10_000,
-  standardHeaders: true,
-  legacyHeaders: false,
   skip: (req) => {
     // Development: disable auth rate limiting entirely
     if (!isProduction) return true;
@@ -106,29 +125,29 @@ const authLimiter = rateLimit({
 });
 
 const scoringLimiter = rateLimit({
+  ...rateLimitDefaults,
   windowMs: 60 * 1000,
   max: 120,
-  standardHeaders: true,
-  legacyHeaders: false,
   message: { success: false, message: "Too many scoring requests, please slow down briefly" },
 });
 
 const publicReadLimiter = rateLimit({
+  ...rateLimitDefaults,
   windowMs: 60 * 1000,
   max: 90,
-  standardHeaders: true,
-  legacyHeaders: false,
   message: { success: false, message: "Too many requests, please try again later" },
 });
 
 app.use(limiter);
+app.use(requestPipelineLogger());
 app.use(requestTiming());
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
-// Stripe webhook must receive the raw body for signature verification
+// Stripe webhook: raw body + DB (registered before JSON parser)
 app.post(
   "/api/payments/webhook",
   express.raw({ type: "application/json" }),
+  (req, res, next) => attachDatabase(req, res, next),
   stripeWebhook
 );
 
@@ -141,7 +160,11 @@ app.get("/api/health", async (_req, res) => {
   let dbPing = null;
 
   try {
-    dbPing = await pingDatabase();
+    if (db.readyState === 1) {
+      dbPing = await pingDatabase();
+    } else {
+      dbPing = { ok: false, state: db.readyState, skipped: "not connected" };
+    }
   } catch (err) {
     dbPing = { ok: false, error: err.message };
   }
@@ -162,6 +185,8 @@ app.get("/api/health", async (_req, res) => {
     },
   });
 });
+
+app.use("/api", attachDatabase);
 
 app.use("/api/auth", authLimiter, authRoutes);
 // Profile APIs — must stay before app.use(notFound)
