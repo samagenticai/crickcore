@@ -57,9 +57,10 @@ export const extractMatchInningsTotals = (match) => {
   }
 
   const currentBat = ls.battingTeam ? String(ls.battingTeam) : null;
+  const inningsNum = ls.inningsNumber ?? 1;
   const hasSecondInnings =
-    (ls.inningsNumber ?? 1) >= 2 ||
-    (firstBat && currentBat && currentBat !== firstBat && ls.isInitialized);
+    inningsNum >= 2 ||
+    (firstBat && currentBat && currentBat !== firstBat && (ls.isInitialized || match.status === "Completed"));
 
   if (hasSecondInnings && currentBat) {
     totals.push({
@@ -99,6 +100,11 @@ const applyInningsToNrr = (innings, teamAId, teamBId, rowA, rowB) => {
   }
 };
 
+const teamRefId = (team) => {
+  if (!team) return null;
+  return String(team._id || team);
+};
+
 const isMatchTied = (match) =>
   match.resultType === "tie" ||
   (match.status === "Completed" && !match.winner && match.resultSummary?.toLowerCase().includes("tied"));
@@ -106,8 +112,9 @@ const isMatchTied = (match) =>
 export const applyMatchToTeamStats = (match, rowA, rowB) => {
   if (!rowA || !rowB) return;
 
-  const aId = String(match.teamA?._id || match.teamA);
-  const bId = String(match.teamB?._id || match.teamB);
+  const aId = teamRefId(match.teamA);
+  const bId = teamRefId(match.teamB);
+  if (!aId || !bId) return;
 
   if (match.status === "Cancelled") {
     rowA.played += 1;
@@ -124,7 +131,7 @@ export const applyMatchToTeamStats = (match, rowA, rowB) => {
   rowA.played += 1;
   rowB.played += 1;
 
-  const winnerId = match.winner ? String(match.winner) : null;
+  const winnerId = teamRefId(match.winner);
 
   if (winnerId === aId || winnerId === bId) {
     const winRow = winnerId === aId ? rowA : rowB;
@@ -193,25 +200,72 @@ const formatStandingsRow = (team, position) => {
 };
 
 /** True when persisted standings may be out of date vs completed matches. */
-export const needsStandingsRecalc = async (tournamentId) => {
-  const [tournament, latestMatch, teamCount] = await Promise.all([
+export const needsStandingsRecalc = async (tournamentId, { Team: TeamModel = Team, Match: MatchModel = Match } = {}) => {
+  await ensureTournamentTeamLinks(tournamentId, { Team: TeamModel, Match: MatchModel });
+
+  const [tournament, latestMatch, teamCount, completedCount] = await Promise.all([
     Tournament.findById(tournamentId).select("standingsUpdatedAt").lean(),
-    Match.findOne({
+    MatchModel.findOne({
       tournament: tournamentId,
       status: { $in: ["Completed", "Cancelled"] },
     })
       .sort({ updatedAt: -1 })
       .select("updatedAt")
       .lean(),
-    Team.countDocuments({ tournament: tournamentId }),
+    TeamModel.countDocuments({ tournament: tournamentId }),
+    MatchModel.countDocuments({
+      tournament: tournamentId,
+      status: { $in: ["Completed", "Cancelled"] },
+    }),
   ]);
 
-  if (!tournament || teamCount === 0) return false;
+  if (!tournament) return false;
+  if (teamCount === 0) {
+    if (completedCount > 0) {
+      console.warn(
+        `[standings] Tournament ${tournamentId} has ${completedCount} finished match(es) but no linked teams — sync team links`
+      );
+    }
+    return false;
+  }
   if (!tournament.standingsUpdatedAt) return true;
   if (latestMatch?.updatedAt && latestMatch.updatedAt > tournament.standingsUpdatedAt) {
     return true;
   }
   return false;
+};
+
+const applyCompletedMatchesToTeams = (matches, teamMap, tournamentId) => {
+  let applied = 0;
+  let skipped = 0;
+
+  for (const match of matches) {
+    const aId = teamRefId(match.teamA);
+    const bId = teamRefId(match.teamB);
+
+    if (!aId || !bId) {
+      skipped += 1;
+      console.warn(
+        `[standings] Skipping match ${match._id} in tournament ${tournamentId}: missing teamA/teamB`
+      );
+      continue;
+    }
+
+    if (!teamMap.has(aId) || !teamMap.has(bId)) {
+      skipped += 1;
+      console.warn(
+        `[standings] Skipping match ${match._id} in tournament ${tournamentId}: team(s) not linked (${aId}, ${bId})`
+      );
+      continue;
+    }
+
+    applyMatchToTeamStats(match, teamMap.get(aId), teamMap.get(bId));
+    applied += 1;
+  }
+
+  console.log(
+    `[standings] Tournament ${tournamentId}: applied ${applied} match(es), skipped ${skipped}`
+  );
 };
 
 const performRecalculate = async (tournamentId, { Team: TeamModel = Team, Match: MatchModel = Match } = {}) => {
@@ -247,15 +301,10 @@ const performRecalculateWithoutTransaction = async (
     tournament: tournamentId,
     status: { $in: ["Completed", "Cancelled"] },
   })
-    .select("teamA teamB winner status liveScore resultType resultSummary")
+    .select("teamA teamB winner status liveScore resultType resultSummary updatedAt")
     .lean();
 
-  for (const match of matches) {
-    const aId = String(match.teamA?._id || match.teamA);
-    const bId = String(match.teamB?._id || match.teamB);
-    if (!teamMap.has(aId) || !teamMap.has(bId)) continue;
-    applyMatchToTeamStats(match, teamMap.get(aId), teamMap.get(bId));
-  }
+  applyCompletedMatchesToTeams(matches, teamMap, tournamentId);
 
   const now = new Date();
   await Promise.all(
@@ -290,18 +339,11 @@ const performRecalculateWithTransaction = async (
       tournament: tournamentId,
       status: { $in: ["Completed", "Cancelled"] },
     })
-      .select("teamA teamB winner status liveScore resultType resultSummary")
+      .select("teamA teamB winner status liveScore resultType resultSummary updatedAt")
       .session(session)
       .lean();
 
-    for (const match of matches) {
-      const aId = String(match.teamA?._id || match.teamA);
-      const bId = String(match.teamB?._id || match.teamB);
-
-      if (!teamMap.has(aId) || !teamMap.has(bId)) continue;
-
-      applyMatchToTeamStats(match, teamMap.get(aId), teamMap.get(bId));
-    }
+    applyCompletedMatchesToTeams(matches, teamMap, tournamentId);
 
     const now = new Date();
 
@@ -331,12 +373,17 @@ const performRecalculateWithTransaction = async (
 
 /**
  * Full rebuild of tournament standings. Concurrent calls for the same tournament
- * share one in-flight operation.
+ * share one in-flight operation, then re-run if a newer completed match was missed.
  */
-export const recalculateTournamentStandings = async (tournamentId, deps = {}) => {
+export const recalculateTournamentStandings = async (tournamentId, deps = {}, depth = 0) => {
   const key = String(tournamentId);
+
   if (inflightRecalc.has(key)) {
-    return inflightRecalc.get(key);
+    await inflightRecalc.get(key);
+    if (depth < 3 && (await needsStandingsRecalc(tournamentId, deps))) {
+      return recalculateTournamentStandings(tournamentId, deps, depth + 1);
+    }
+    return;
   }
 
   const promise = performRecalculate(tournamentId, deps).finally(() => {
@@ -344,7 +391,11 @@ export const recalculateTournamentStandings = async (tournamentId, deps = {}) =>
   });
 
   inflightRecalc.set(key, promise);
-  return promise;
+  await promise;
+
+  if (depth < 3 && (await needsStandingsRecalc(tournamentId, deps))) {
+    return recalculateTournamentStandings(tournamentId, deps, depth + 1);
+  }
 };
 
 /**
@@ -354,9 +405,10 @@ export const getTournamentStandings = async (
   tournamentId,
   { recalculate = false, Team: TeamModel = Team, Match: MatchModel = Match } = {}
 ) => {
-  const stale = recalculate || (await needsStandingsRecalc(tournamentId));
+  const deps = { Team: TeamModel, Match: MatchModel };
+  const stale = recalculate || (await needsStandingsRecalc(tournamentId, deps));
   if (stale) {
-    await recalculateTournamentStandings(tournamentId, { Team: TeamModel, Match: MatchModel });
+    await recalculateTournamentStandings(tournamentId, deps);
   }
 
   const tournament = await Tournament.findById(tournamentId)

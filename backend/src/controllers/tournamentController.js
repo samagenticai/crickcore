@@ -1609,6 +1609,10 @@ export const recordMatchResult = asyncHandler(async (req, res) => {
 
   match.winner = winner;
   match.status = "Completed";
+  if (!match.resultSummary) {
+    const winnerTeam = await Team.findById(winner).select("name");
+    match.resultSummary = `${winnerTeam?.name || "Winner"} won`;
+  }
   await match.save();
 
   notifyMatchCompleted(req.user._id, match, tournament).catch((err) =>

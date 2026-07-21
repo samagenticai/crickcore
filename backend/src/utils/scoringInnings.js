@@ -109,11 +109,11 @@ export const determineMatchResult = (match, ls, maxBalls) => {
   const teamBId = String(match.teamB._id || match.teamB);
   const battingId = String(ls.battingTeam);
   const bowlingId = String(ls.bowlingTeam);
-  const target = ls.target;
+  const target = resolveTarget(ls);
   const runs = ls.totalRuns ?? 0;
   const wickets = ls.wickets ?? 0;
 
-  if (target == null || ls.inningsNumber < 2) return null;
+  if (target == null || (ls.inningsNumber ?? 1) < 2) return null;
 
   // Chase successful
   if (runs >= target) {
