@@ -24,6 +24,7 @@ import {
 } from "../utils/tournamentStatus.js";
 import {
   recalculateTournamentStandings,
+  rebuildTournamentStandings,
   getTournamentStandings as fetchTournamentStandings,
   loadTournamentTeams,
 } from "../services/pointsTableService.js";
@@ -641,6 +642,27 @@ export const getTournamentStandings = asyncHandler(async (req, res) => {
   const standings = await fetchTournamentStandings(tournament._id, { recalculate: forceRecalc });
 
   res.json({ success: true, data: standings });
+});
+
+export const rebuildTournamentStandingsHandler = asyncHandler(async (req, res) => {
+  const tournament = await Tournament.findOne({
+    _id: req.params.id,
+    createdBy: req.user._id,
+  }).select("_id isStorageArchived");
+
+  if (!tournament) throw new ApiError(404, "Tournament not found");
+  if (tournament.isStorageArchived) {
+    throw new ApiError(400, "Cannot rebuild standings for an archived tournament");
+  }
+
+  await rebuildTournamentStandings(tournament._id, { Team, Match });
+  const standings = await fetchTournamentStandings(tournament._id);
+
+  res.json({
+    success: true,
+    message: "Points table rebuilt from all completed matches",
+    data: standings,
+  });
 });
 
 export const addTeamsToTournament = asyncHandler(async (req, res) => {

@@ -14,6 +14,7 @@ import {
   publishTournament,
   getTournamentTeams,
   getTournamentStandings,
+  rebuildTournamentStandingsHandler,
   addTeamsToTournament,
   removeTeamFromTournament,
   generateFixtures,
@@ -54,6 +55,7 @@ router.post("/:id/duplicate", duplicateTournament);
 router.patch("/:id/archive", archiveTournament);
 router.patch("/:id/publish", publishTournament);
 
+router.post("/:id/standings/rebuild", rebuildTournamentStandingsHandler);
 router.get("/:id/standings", getTournamentStandings);
 router.get("/:id/teams", getTournamentTeams);
 router.post("/:id/teams", addTeamsToTournament);
