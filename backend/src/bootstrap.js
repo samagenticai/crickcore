@@ -10,11 +10,16 @@ let migrationsPromise = null;
  */
 export function ensureDatabaseReady() {
   if (!readyPromise) {
+    console.log("[bootstrap] ensureDatabaseReady() starting…");
+    const started = Date.now();
     readyPromise = (async () => {
       validateEnvironment();
+      console.log("[bootstrap] env validated");
       await connectDB();
+      console.log(`[bootstrap] ensureDatabaseReady() done in ${Date.now() - started}ms`);
     })().catch((err) => {
       readyPromise = null;
+      console.error(`[bootstrap] ensureDatabaseReady() failed in ${Date.now() - started}ms:`, err.message);
       throw err;
     });
   }

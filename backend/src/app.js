@@ -79,13 +79,23 @@ if (process.env.VERCEL || process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
 
-const rateLimitKey = (req) =>
-  req.ip ||
-  String(req.headers["x-forwarded-for"] || "")
+const rateLimitKey = (req) => {
+  const xff = String(req.headers["x-forwarded-for"] || "")
     .split(",")[0]
-    ?.trim() ||
-  req.socket?.remoteAddress ||
-  "anonymous";
+    ?.trim();
+  if (xff) return xff;
+
+  if (req.socket?.remoteAddress) return req.socket.remoteAddress;
+
+  // req.ip can throw when trust proxy is set but connection metadata is missing (Vercel).
+  try {
+    if (req.ip) return req.ip;
+  } catch {
+    /* ignore */
+  }
+
+  return "anonymous";
+};
 
 const rateLimitDefaults = {
   standardHeaders: true,
@@ -173,7 +183,11 @@ const publicReadLimiter = rateLimit({
 app.use(traceStep("limiter"), limiter);
 app.use(requestPipelineLogger());
 app.use(traceStep("timing"), requestTiming());
-app.use(traceStep("morgan"), morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+const morganFormat = process.env.NODE_ENV === "production" ? "combined" : "dev";
+
+if (!process.env.VERCEL) {
+  app.use(traceStep("morgan"), morgan(morganFormat));
+}
 
 // Stripe webhook: raw body + DB (registered before JSON parser)
 app.post(
@@ -210,6 +224,8 @@ app.use("/api/admin", adminRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
+
+console.log(`[app] Express configured bootId=${SERVER_BOOT_ID} routes=/api/*`);
 
 export { profileRouteManifest };
 export default app;

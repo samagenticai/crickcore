@@ -44,7 +44,13 @@ export function requestPipelineLogger() {
 
 /** Ensures MongoDB is connected before route handlers run (cached per process). */
 export function attachDatabase(req, res, next) {
+  // /api/health is registered above the middleware stack; skip if it reaches here.
+  if (req.path === "/health" || req.originalUrl === "/api/health") {
+    return next();
+  }
+
   let settled = false;
+  console.log(`[DB middleware] attach start ${req.method} ${req.originalUrl}`);
 
   const timer = setTimeout(() => {
     if (settled) return;
@@ -59,6 +65,7 @@ export function attachDatabase(req, res, next) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      console.log(`[DB middleware] attach ok ${req.method} ${req.originalUrl}`);
       next();
     })
     .catch((err) => {

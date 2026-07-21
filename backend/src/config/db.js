@@ -60,13 +60,19 @@ function withTimeout(promise, ms, label) {
 }
 
 const connectDB = async () => {
+  const callStarted = Date.now();
+  console.log(`[MongoDB] connectDB() called (readyState=${mongoose.connection.readyState})`);
+
   if (mongoose.connection.readyState === 1) {
+    console.log("[MongoDB] already connected — reusing pool");
     return mongoose.connection;
   }
 
   if (connectPromise) {
+    console.log("[MongoDB] awaiting in-flight connectPromise…");
     await connectPromise;
     if (mongoose.connection.readyState === 1) {
+      console.log(`[MongoDB] in-flight connect resolved in ${Date.now() - callStarted}ms`);
       return mongoose.connection;
     }
     connectPromise = null;
@@ -94,7 +100,9 @@ const connectDB = async () => {
 
   try {
     await connectPromise;
-    console.log(`MongoDB connected: ${mongoose.connection.host}/${mongoose.connection.name}`);
+    console.log(
+      `[MongoDB] connectDB() complete in ${Date.now() - callStarted}ms → ${mongoose.connection.host}/${mongoose.connection.name}`
+    );
     return mongoose.connection;
   } catch (err) {
     connectPromise = null;

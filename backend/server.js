@@ -61,14 +61,17 @@ function registerShutdown(server) {
 
 async function main() {
   try {
+    console.log("[server] starting…");
+    console.log("[server] connecting database before listen…");
     await ensureDatabaseReady();
+    console.log("[server] database ready — creating HTTP server");
 
     const server = http.createServer(app);
     await listenOnce(server, PORT, HOST);
 
     globalThis.__CRICKET_MATCH_SERVER__ = { server, port: PORT, host: HOST };
 
-    console.log(`Server running on http://${HOST}:${PORT} (pid ${process.pid})`);
+    console.log(`[server] listening on http://${HOST}:${PORT} (pid ${process.pid})`);
     printProfileRoutes(profileRouteManifest);
     console.log("Verify: GET /api/health must include profile.routes");
     console.log(
