@@ -1,0 +1,19 @@
+{
+  "name": "cricket-tournament",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=frontend",
+    "vercel-build": "npm run build --workspace=frontend",
+    "start:api": "npm run start --workspace=backend",
+    "dev:api": "npm run dev --workspace=backend",
+    "dev:web": "npm run dev --workspace=frontend"
+  },
+  "dependencies": {
+    "serverless-http": "^3.2.0"
+  }
+}

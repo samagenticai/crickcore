@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #16a34a;
+  --color-primary-dark: #15803d;
+  --color-primary-light: #22c55e;
+  --color-secondary: #0f172a;
+  --color-accent: #f59e0b;
+  --color-accent-light: #fbbf24;
+  --color-surface: #f8fafc;
+  --color-text: #1e293b;
+  --color-text-muted: #64748b;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius-card: 1rem;
+  --radius-button: 0.75rem;
+  --breakpoint-xs: 30rem;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-white text-text font-sans antialiased overflow-x-hidden;
+    background-image: radial-gradient(circle at top left, rgba(22, 163, 74, 0.1), transparent 24%),
+      radial-gradient(circle at top right, rgba(245, 158, 11, 0.08), transparent 28%),
+      linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    @apply bg-primary/20 text-secondary;
+  }
+}
+
+@layer components {
+  .section-container {
+    @apply max-w-7xl mx-auto w-full px-4 sm:px-5 lg:px-8 min-w-0;
+  }
+
+  .section-padding {
+    @apply py-14 sm:py-20 lg:py-28;
+  }
+
+  .section-padding-sm {
+    @apply py-12 sm:py-16 lg:py-20;
+  }
+
+  .heading-xl {
+    @apply text-[1.65rem] sm:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15] text-balance;
+  }
+
+  .heading-lg {
+    @apply text-2xl sm:text-3xl font-bold tracking-tight leading-snug;
+  }
+
+  .body-lg {
+    @apply text-sm sm:text-base lg:text-lg leading-relaxed text-pretty;
+  }
+
+  .card-base {
+    @apply rounded-2xl border border-slate-200/80 bg-white shadow-sm;
+  }
+
+  .card-premium {
+    @apply rounded-[1.15rem] sm:rounded-2xl border border-slate-200/70 bg-white/95 backdrop-blur-sm
+           shadow-[0_1px_3px_rgba(15,23,42,0.04),0_6px_20px_rgba(15,23,42,0.06)]
+           transition-[box-shadow,transform,border-color] duration-300 ease-out;
+  }
+
+  .card-premium-hover {
+    @apply hover:shadow-[0_8px_28px_rgba(15,23,42,0.08),0_4px_12px_rgba(22,163,74,0.08)]
+           hover:border-primary/25;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] touch-manipulation;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/75 backdrop-blur-xl border border-white/30;
+  }
+
+  .glass-dark {
+    @apply bg-secondary/85 backdrop-blur-xl border border-white/10;
+  }
+
+  .dot-pattern {
+    background-image: radial-gradient(circle, #cbd5e1 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-linear-to-r from-primary to-accent;
+  }
+
+  .glow-primary {
+    box-shadow: 0 0 32px -8px rgba(22, 163, 74, 0.45);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 32px -8px rgba(245, 158, 11, 0.4);
+  }
+
+  .safe-overflow {
+    @apply min-w-0 max-w-full overflow-hidden;
+  }
+}
+
+@keyframes gradient-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes viewer-ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.viewer-ticker-track {
+  animation: viewer-ticker-scroll 40s linear infinite;
+  width: max-content;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer-ticker-track {
+    animation: none;
+  }
+
+  .viewer-live-dot,
+  .viewer-fade-in {
+    animation: none !important;
+  }
+}
+
+@keyframes viewer-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(0.88);
+  }
+}
+
+.viewer-live-dot {
+  animation: viewer-live-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes viewer-fade-in {
+  from {
+    opacity: 0.92;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.viewer-fade-in {
+  animation: viewer-fade-in 0.3s ease-out;
+}
+
+.viewer-deliveries-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.5) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.viewer-deliveries-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.viewer-deliveries-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.45);
+  border-radius: 9999px;
+}
