@@ -3,6 +3,25 @@ import Team from "../models/Team.js";
 import Match from "../models/Match.js";
 import { rebuildTournamentStandings } from "../services/pointsTableService.js";
 import { ensureTournamentTeamLinks } from "./tournamentTeams.js";
+import { toObjectIdOrNull } from "./objectId.js";
+
+/** Promote legacy rows that have a recorded result but wrong status. */
+export const normalizeCompletedMatchStatuses = async (tournamentId) => {
+  const tid = toObjectIdOrNull(tournamentId);
+  if (!tid) return 0;
+
+  const result = await Match.updateMany(
+    {
+      $or: [{ tournament: tid }, { tournament: String(tid) }],
+      status: { $nin: ["Completed", "Cancelled"] },
+      winner: { $ne: null },
+      resultSummary: { $nin: [null, ""] },
+    },
+    { $set: { status: "Completed" } }
+  );
+
+  return result.modifiedCount ?? 0;
+};
 
 /** Sync tournament.teams array from Team.tournament refs and tournament.teams back-links. */
 export const syncTournamentTeamRefs = async (tournamentId) => {
@@ -39,6 +58,7 @@ export const backfillMissingToss = async (tournamentId) => {
 export const migrateTournamentData = async (tournamentId) => {
   await syncTournamentTeamRefs(tournamentId);
   await backfillMissingToss(tournamentId);
+  await normalizeCompletedMatchStatuses(tournamentId);
   await rebuildTournamentStandings(tournamentId, { Team, Match });
 };
 
@@ -51,6 +71,7 @@ export const migrateAllTournaments = async () => {
   for (const tournament of tournaments) {
     syncedTeams += await syncTournamentTeamRefs(tournament._id);
     tossBackfilled += await backfillMissingToss(tournament._id);
+    await normalizeCompletedMatchStatuses(tournament._id);
     await rebuildTournamentStandings(tournament._id, { Team, Match });
     standingsRecalculated += 1;
   }

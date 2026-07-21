@@ -28,6 +28,7 @@ import {
   snapshotFirstInnings,
 } from "../utils/scoringInnings.js";
 import { recalculateTournamentStandings } from "../services/pointsTableService.js";
+import { toObjectIdOrNull } from "../utils/objectId.js";
 import { assertFirstInningsMatchesToss } from "../utils/toss.js";
 import {
   setUmpiresAvailable,
@@ -149,7 +150,7 @@ const endFirstAndPrepareSecond = (match, ls) => {
 
 const finalizeLiveMatch = async (match, result) => {
   if (result.winner) {
-    match.winner = result.winner;
+    match.winner = toObjectIdOrNull(result.winner);
   } else {
     match.winner = null;
   }
