@@ -28,12 +28,19 @@ export function hasMatchResult(match) {
   return match?.status === "Completed" && Boolean(match?.matchResult?.innings?.length);
 }
 
-export function getChasingTeamId(match) {
-  const ls = match?.liveScore;
-  if (!ls?.firstInnings?.battingTeam) return null;
+export function getChasingTeamId(match, liveScoreOverride) {
+  const ls = liveScoreOverride ?? match?.liveScore;
+  if (!ls) return null;
+
+  // During innings break the backend already sets battingTeam to the chasing side.
+  if (ls.awaitingSecondInnings && ls.battingTeam) {
+    return String(ls.battingTeam);
+  }
+
+  if (ls.firstInnings?.battingTeam == null) return null;
   const firstBat = String(ls.firstInnings.battingTeam);
-  const aId = String(match.teamA?._id || match.teamA);
-  const bId = String(match.teamB?._id || match.teamB);
+  const aId = String(match?.teamA?._id || match?.teamA);
+  const bId = String(match?.teamB?._id || match?.teamB);
   return firstBat === aId ? bId : aId;
 }
 

@@ -34,6 +34,7 @@ export default function PublicFixtureCard({ match, tournamentName, tournament, t
     tournamentId && match?._id ? `/viewer/${tournamentId}/match/${match._id}` : null;
   const ls = match.liveScore;
   const showScore = match.status === "Live" && ls?.isInitialized;
+  const inBreak = match.status === "Live" && ls?.awaitingSecondInnings && !ls?.isInitialized;
   const showResult = hasMatchResult(match);
 
   const content = (
@@ -65,6 +66,18 @@ export default function PublicFixtureCard({ match, tournamentName, tournament, t
           {match.resultSummary && (
             <p className="text-xs font-semibold text-emerald-700">{match.resultSummary}</p>
           )}
+        </div>
+      )}
+
+      {inBreak && (
+        <div className="mt-2 space-y-1">
+          <p className="text-xs font-semibold text-amber-700">Innings break</p>
+          <p className="text-sm font-bold text-secondary tabular-nums">
+            {ls.firstInnings?.runs ?? 0}/{ls.firstInnings?.wickets ?? 0}
+            <span className="text-text-muted font-medium ml-2">
+              ({ls.firstInnings?.overs ?? "0.0"} ov)
+            </span>
+          </p>
         </div>
       )}
 

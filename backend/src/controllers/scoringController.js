@@ -108,6 +108,7 @@ const lockFirstInnings = (ls) => {
     runs: snapshot.runs,
     wickets: snapshot.wickets,
     legalBalls: snapshot.legalBalls,
+    overs: snapshot.overs,
     battingTeam: snapshot.battingTeam,
   };
   ls.target = calcTarget(ls.firstInnings.runs);
@@ -271,6 +272,7 @@ const populateScoreState = async (match) => {
       tossDecision: match.tossDecision,
       umpires: match.umpires || [],
       umpireNames: match.umpireNames || [],
+      liveScore: buildLiveScorePayload(match, ls, { striker, nonStriker, bowler }),
     },
     liveScore: {
       ...buildLiveScorePayload(match, ls, { striker, nonStriker, bowler }),

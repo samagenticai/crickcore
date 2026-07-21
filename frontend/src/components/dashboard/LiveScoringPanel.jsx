@@ -64,7 +64,7 @@ const ballLabel = (ball) => {
 
 const teamName = (team) => team?.name || "Team";
 
-export default function LiveScoringPanel({ match: initialMatch, onClose }) {
+export default function LiveScoringPanel({ match: initialMatch, onClose, onMatchUpdate }) {
   const [scoreData, setScoreData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [initOpen, setInitOpen] = useState(false);
@@ -87,7 +87,10 @@ export default function LiveScoringPanel({ match: initialMatch, onClose }) {
       recentBalls: payload.recentBalls,
       scorecard: payload.scorecard,
     });
-  }, []);
+    if (onMatchUpdate && payload.match?._id && payload.liveScore) {
+      onMatchUpdate(payload.match._id, payload.liveScore, payload.match);
+    }
+  }, [onMatchUpdate]);
 
   const fetchScore = useCallback(async () => {
     if (!initialMatch?._id) return;
@@ -95,7 +98,9 @@ export default function LiveScoringPanel({ match: initialMatch, onClose }) {
       const { data } = await scoringAPI.getMatchScore(initialMatch._id);
       syncScoreData(data.data);
       const ls = data.data?.liveScore;
-      if (!ls?.isInitialized && (ls?.awaitingSecondInnings || !ls?.firstInnings?.runs)) {
+      if (ls?.awaitingSecondInnings && !ls?.isInitialized) {
+        setInitOpen(true);
+      } else if (!ls?.isInitialized && !ls?.awaitingSecondInnings && ls?.firstInnings?.runs == null) {
         setInitOpen(true);
       }
     } catch (err) {

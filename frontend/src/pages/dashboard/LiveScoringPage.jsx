@@ -10,6 +10,8 @@ const teamLabel = (team, slot) => (team && team.name) || slot?.label || "TBD";
 
 function LiveMatchCard({ match, selected, onSelect }) {
   const ls = match.liveScore || {};
+  const inBreak = ls.awaitingSecondInnings && !ls.isInitialized;
+  const showLiveScore = ls.isInitialized || inBreak;
 
   return (
     <button
@@ -40,11 +42,26 @@ function LiveMatchCard({ match, selected, onSelect }) {
         {match.round ? ` · ${match.round}` : ""}
       </p>
 
-      {ls.isInitialized ? (
-        <p className="mt-2 text-lg font-extrabold text-secondary">
-          {ls.totalRuns ?? 0}/{ls.wickets ?? 0}
-          <span className="text-sm font-semibold text-text-muted ml-2">({ls.overs ?? "0.0"} ov)</span>
-        </p>
+      {showLiveScore ? (
+        inBreak ? (
+          <div className="mt-2 space-y-1">
+            <p className="text-xs font-semibold text-amber-700">Innings break</p>
+            <p className="text-lg font-extrabold text-secondary">
+              {ls.firstInnings?.runs ?? 0}/{ls.firstInnings?.wickets ?? 0}
+              <span className="text-sm font-semibold text-text-muted ml-2">
+                ({ls.firstInnings?.overs ?? ls.overs ?? "0.0"} ov)
+              </span>
+            </p>
+            {ls.target != null && (
+              <p className="text-xs text-text-muted">Target: {ls.target}</p>
+            )}
+          </div>
+        ) : (
+          <p className="mt-2 text-lg font-extrabold text-secondary">
+            {ls.totalRuns ?? 0}/{ls.wickets ?? 0}
+            <span className="text-sm font-semibold text-text-muted ml-2">({ls.overs ?? "0.0"} ov)</span>
+          </p>
+        )
       ) : (
         <p className="mt-2 text-xs text-amber-700 font-semibold">Scoring not started</p>
       )}
@@ -73,6 +90,15 @@ export default function LiveScoringPage() {
     }
   }, []);
 
+  const handleMatchUpdate = useCallback((matchId, liveScore, matchMeta) => {
+    const patch = (m) =>
+      String(m._id) === String(matchId)
+        ? { ...m, ...matchMeta, liveScore: { ...(m.liveScore || {}), ...liveScore } }
+        : m;
+    setMatches((prev) => prev.map(patch));
+    setSelectedMatch((prev) => (prev && String(prev._id) === String(matchId) ? patch(prev) : prev));
+  }, []);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -88,10 +114,10 @@ export default function LiveScoringPage() {
     if (found) setSelectedMatch(found);
   }, [location.state, matches]);
 
-  // Pause sidebar polling while scoring — the panel owns live state after each ball.
+  // Refresh sidebar while scoring; panel pushes updates via onMatchUpdate after each action.
   useEffect(() => {
-    if (selectedMatch) return undefined;
-    const id = setInterval(fetchLiveMatches, 30000);
+    const intervalMs = selectedMatch ? 15000 : 30000;
+    const id = setInterval(fetchLiveMatches, intervalMs);
     return () => clearInterval(id);
   }, [fetchLiveMatches, selectedMatch]);
 
@@ -152,6 +178,7 @@ export default function LiveScoringPage() {
                   <LiveScoringPanel
                     match={selectedMatch}
                     onClose={() => setSelectedMatch(null)}
+                    onMatchUpdate={handleMatchUpdate}
                   />
                 </motion.div>
               ) : (

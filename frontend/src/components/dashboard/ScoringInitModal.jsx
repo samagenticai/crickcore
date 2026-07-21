@@ -44,14 +44,16 @@ export default function ScoringInitModal({ open, match, liveScore, onClose, onIn
     [match]
   );
   const chasingTeamId = useMemo(
-    () => (isSecondInnings ? getChasingTeamId(match) : null),
-    [isSecondInnings, match]
+    () => (isSecondInnings ? getChasingTeamId(match, liveScore) : null),
+    [isSecondInnings, match, liveScore]
   );
 
   const effectiveBattingId = useMemo(() => {
-    if (isSecondInnings && chasingTeamId) return String(chasingTeamId);
+    if (isSecondInnings) {
+      return chasingTeamId || (liveScore?.battingTeam ? String(liveScore.battingTeam) : "");
+    }
     return battingTeamId;
-  }, [isSecondInnings, chasingTeamId, battingTeamId]);
+  }, [isSecondInnings, chasingTeamId, liveScore?.battingTeam, battingTeamId]);
 
   const battingXI =
     effectiveBattingId === String(teamAId)
@@ -73,16 +75,15 @@ export default function ScoringInitModal({ open, match, liveScore, onClose, onIn
 
   useEffect(() => {
     if (open && match) {
-      const defaultBatting =
-        isSecondInnings && chasingTeamId
-          ? String(chasingTeamId)
-          : String(tossBattingId || teamAId || "");
+      const defaultBatting = isSecondInnings
+        ? String(chasingTeamId || liveScore?.battingTeam || "")
+        : String(tossBattingId || teamAId || "");
       setBattingTeamId(defaultBatting);
       setStrikerId("");
       setNonStrikerId("");
       setBowlerId("");
     }
-  }, [open, match, teamAId, isSecondInnings, chasingTeamId, tossBattingId]);
+  }, [open, match, teamAId, isSecondInnings, chasingTeamId, liveScore?.battingTeam, tossBattingId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -96,10 +97,14 @@ export default function ScoringInitModal({ open, match, liveScore, onClose, onIn
       toast.error(bowlingLimitMessage(matchOvers));
       return;
     }
+    if (!effectiveBattingId) {
+      toast.error("Could not determine the chasing team for second innings");
+      return;
+    }
     try {
       await withLock(async () => {
         const { data } = await scoringAPI.initScoring(match._id, {
-          battingTeamId,
+          battingTeamId: effectiveBattingId,
           strikerId,
           nonStrikerId,
           bowlerId,
@@ -115,8 +120,11 @@ export default function ScoringInitModal({ open, match, liveScore, onClose, onIn
 
   if (!match) return null;
 
-  const chasingTeamName =
-    chasingTeamId === String(teamAId) ? teamLabel(match.teamA) : teamLabel(match.teamB);
+  const chasingTeamName = useMemo(() => {
+    const id = effectiveBattingId || chasingTeamId;
+    if (!id) return "Chasing team";
+    return id === String(teamAId) ? teamLabel(match.teamA) : teamLabel(match.teamB);
+  }, [effectiveBattingId, chasingTeamId, teamAId, match]);
 
   const tossBattingName =
     tossBattingId === String(teamAId) ? teamLabel(match.teamA) : teamLabel(match.teamB);
